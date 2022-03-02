@@ -24,25 +24,30 @@ class OMP_proj:
 
 # MOMP projection initialization steps
 class MOMP_greedy_proj:
-    def __init__(self, A, X, sorting=None, normallized=True):
+    def __init__(self, A, X, X_lr=None, sorting=None, normallized=True):
         self.A = A
-        self.X = X
+        if X_lr is None:
+            self.X = X
+            self.X_hr = None
+        else:
+            self.X = X_lr
+            self.X_norm2 = [vnorm2(x) for x in X_lr]
+            self.X_hr = X
         self.normallized = normallized
         if sorting is None:
-            sorting = [ii for ii in range(len(X))]
+            sorting = np.argsort([x.shape[0] for x in self.X])[::-1]
         self.sorting = sorting
         self.sorting_pre = sorting.copy()
-        for ii_dim, sp in enumerate(sorting):
-            for s in sorting[:ii_dim]:
+        for ii_dim, sp in enumerate(self.sorting):
+            for s in self.sorting[:ii_dim]:
                 if s < sp:
                     self.sorting_pre[ii_dim] -= 1
 
-    @profile
     def __call__(self, Y_res, YA=None, *args, **kwargs):
         ii = [None]*len(self.sorting)
         if self.normallized:
             AX = self.A.copy()
-            for ii_dim, sp in enumerate(self.sorting_pre):
+            for ii_dim, sp in zip(self.sorting, self.sorting_pre):
                 AX = np.tensordot(AX, self.X[ii_dim], axes=(1+sp, 0))
                 YAX = np.tensordot(np.conj(Y_res), AX, axes=(0, 0))
                 if bool_cp:
@@ -60,12 +65,55 @@ class MOMP_greedy_proj:
                 YAX = np.tensordot(np.conj(Y_res), self.A, axes=(0, 0))
             else:
                 YAX = YA.copy()
-            for ii_dim, sp in enumerate(self.sorting_pre):
+            for ii_dim, sp in zip(self.sorting, self.sorting_pre):
                 YAX = np.tensordot(YAX, self.X[ii_dim], axes=(1+sp, 0))
                 YAX_norm2 = vnorm2(YAX.reshape([-1, YAX.shape[-1]]))
                 iii = np.argmax(YAX_norm2)
                 ii[ii_dim] = iii
                 YAX = YAX[..., iii]
+        # Translate to high resolution
+        if self.X_hr is not None:
+            X_ii = np.ones([x.shape[0] for x in self.X])
+            for ii_dim, iii in enumerate(ii):
+                X_ii = X_ii * self.X[ii_dim][:, iii].reshape([
+                    self.X[ii_dim].shape[0]
+                    if ii_dimp == ii_dim else 1
+                    for ii_dimp in range(len(self.X))])
+            td_axis_r = [ii_dimp for ii_dimp in range(len(self.X)-1)]
+            for ii_dim in self.sorting:
+                iii = ii[ii_dim]
+                td_axis_l = [
+                    ii_dimp+1
+                    for ii_dimp in range(len(self.X))
+                    if ii_dimp != ii_dim]
+                # Exclude (ii_dim, iii) from X_ii
+                X_niii = np.tensordot(
+                    X_ii, self.X[ii_dim][:, iii],
+                    axes=(ii_dim, 0))/self.X_norm2[ii_dim][iii]
+                # Compute projection
+                if self.normallized:
+                    AX_niii = np.tensordot(
+                        self.A, X_niii,
+                        axes=(td_axis_l, td_axis_r))
+                    AX = np.dot(AX_niii, self.X_hr[ii_dim])
+                    YAX = np.tensordot(np.conj(Y_res), AX, axes=(0, 0))
+                    AX_norm = vnorm(AX)
+                    YAX_norm = vnorm(YAX)
+                    iii = np.argmax(YAX_norm/AX_norm)
+                else:
+                    YAX_niii = np.tensordot(
+                        YA, X_niii,
+                        axes=(td_axis_l, td_axis_r))
+                    YAX = np.dot(YAX_niii, self.X_hr[ii_dim])
+                    YAX_norm = vnorm(YAX)
+                    iii = np.argmax(YAX_norm)
+                ii[ii_dim] = iii
+                # Update X_ii
+                X_ii = np.expand_dims(X_niii, ii_dim) *\
+                    self.X_hr[ii_dim][:, iii].reshape([
+                        self.X_hr[ii_dim].shape[0]
+                        if ii_dimp == ii_dim else 1
+                        for ii_dimp in range(len(self.X_hr))])
         return ii
 
 
@@ -91,12 +139,12 @@ class MOMP_proj:
         self.n = n
         self.normallized = normallized
         if sorting is None:
-            sorting = [ii for ii in range(len(X))]
+            sorting = np.argsort([x.shape[0] for x in self.X])[::-1]
         self.sorting = sorting
         if initial is None:
             initial = MOMP_greedy_proj(A, X, sorting=sorting, normallized=normallized)
         self.initial = initial
-    @profile
+
     def __call__(self, Y_res):
         # Initial estimation
         if self.normallized:
