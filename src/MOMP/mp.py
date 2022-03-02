@@ -1,46 +1,49 @@
 import numpy as np
 
-def OMP(Y, A, n):
-    bool_flat = len(Y.shape) == 1
-    if bool_flat:
-        Y = Y[:, np.newaxis]
-    X_norm = normallized(X)
-    Y_res = Y.copy()
-    I = []
-    for _ in range(n):
-        YX = np.dot(np.conj(Y_res.T), X_norm)
-        I.append(np.argmax(np.linalg.norm(YX, axis = 0)))
-        alpha = np.linalg.lstsq(X[:, I], Y, rcond = None)[0]
-        Y_res = Y - np.dot(X[:, I], alpha)
-    if bool_flat:
-        alpha = alpha[:, 0]
-    return alpha, I
-
-def MOMP(Y, A, X, n, sorting = None, refinement = 5, AX_all_norm = None):
-    if sorting is None:
-        sorting = np.argsort([x.shape[0] for x in X])[::-1]         # Bigger dimensions are computed first
-    N_dims = len(sorting)
-    bool_flat = len(Y.shape) == 1
+def MP(Y, proj, stop):
+    bool_flat = len(Y.shape) == 1   # Check if Y is a vector
     if bool_flat:
         Y = Y[..., np.newaxis]
-    N_measures = Y.shape[-1]
-    Size_measures = A.shape[-1]
-    # Inverse permutation of sorting
-    sorting_inv = np.arange(N_dims)
-    sorting_inv[sorting] = np.arange(N_dims)
-    # Apply sorting
-    A = np.transpose(A, [N_dims]+[s for s in sorting])
-    if AX_all_norm is not None:
-        if AX_all_norm != "ignore":
-            AX_all_norm = np.transpose(AX_all_norm, sorting)
     # Initialization
     I = []
+    AX_I = np.array([])
     Y_res = Y
     # Loop
     while True:
-        pass
-
+        ii, AX_ii = proj(Y_res)
+        I.append(ii)
+        AX_I = np.contatenate([AX_I, AX_ii[:, np.newaxis]], axis=1)
+        alpha_ii = np.dot(AX_ii.conj(), Y_res)
+        alpha = np.concatenate([alpha, alpha_ii[np.newaxis]], axis=0)
+        Y_res = Y_res - AX_ii*alpha_ii
+        if stop(Y, Y_res, AX_I, alpha):
+            break
     # Undo flatness
     if bool_flat:
         alpha = alpha[:, 0]
-    return alpha, np.array(I)[:, sorting_inv]
+    return alpha, np.array(I)
+
+class OMP:
+    def __init__(self, proj, stop):
+        self.proj = proj
+        self.stop = stop
+    def __call__(self, Y):
+        bool_flat = len(Y.shape) == 1   # Check if Y is a vector
+        if bool_flat:
+            Y = Y[..., np.newaxis]
+        # Initialization
+        I = []
+        AX_I = np.zeros((Y.shape[0], 0))
+        alpha = np.zeros((0, Y.shape[1]))
+        Y_res = Y.copy()
+        # Loop
+        while not self.stop(Y, Y_res, AX_I, alpha):
+            ii, AX_ii = self.proj(Y_res)
+            I.append(ii)
+            AX_I = np.concatenate([AX_I, AX_ii[:, np.newaxis]], axis=1)
+            alpha = np.linalg.lstsq(AX_I, Y, rcond=None)[0]
+            Y_res = Y - np.dot(AX_I, alpha)
+        # Undo flatness
+        if bool_flat:
+            alpha = alpha[:, 0]
+        return np.array(I), alpha

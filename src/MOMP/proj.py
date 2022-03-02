@@ -148,5 +148,7 @@ class MOMP_proj:
                         self.X[ii_dim].shape[0]
                         if ii_dimp == ii_dim else 1
                         for ii_dimp in range(len(self.X))])
-        # MORE CODE
-        return ii, X_ii
+        AX_ii = np.tensordot(self.A, X_ii, axes=(
+            [ii_dim+1 for ii_dim in range(len(self.sorting))],
+            [ii_dim for ii_dim in range(len(self.sorting))]))
+        return ii, AX_ii

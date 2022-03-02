@@ -38,12 +38,15 @@ Y = A.reshape([N_o, -1]) @ H.reshape([-1, N_m])
 #alpha, I = MOMP(Y, A, X, 3)
 
 # Test
-proj_step = MOMP.proj.MOMP_proj(A, X)
-ii, _ = proj_step(Y)
-proj_step = MOMP.proj.MOMP_proj(A, X, normallized=False)
-ii_fast, _ = proj_step(Y)
+stop = MOMP.stop.General(maxIter=5)
+proj = MOMP.proj.MOMP_proj(A, X)
+alg = MOMP.mp.OMP(proj, stop)
+I, alpha = alg(Y)
+proj = MOMP.proj.MOMP_proj(A, X, normallized=False)
+alg = MOMP.mp.OMP(proj, stop)
+I_fast, alpha = alg(Y)
 
 # Retrieve features
-feat_est = [dom[iii] for iii, dom in zip(ii, Domains)]
-feat_fast_est = [dom[iii] for iii, dom in zip(ii_fast, Domains)]
+feat_est = [[dom[iii] for iii, dom in zip(ii, Domains)] for ii in I]
+feat_fast_est = [[dom[iii] for iii, dom in zip(ii, Domains)] for ii in I_fast]
 print(feat, feat_est, feat_fast_est)
