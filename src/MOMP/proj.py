@@ -1,17 +1,8 @@
 import numpy as np
-try:
-    import cupy as cp
-    bool_cp = True
-    def vnorm(X):
-        return cp.linalg.norm(cp.asarray(X), ord=2, axis=0).get()
-    def vnorm2(X):
-        return vnorm(X)**2
-except:
-    bool_cp = False
-    def vnorm(X):
-        return np.linalg.norm(X, ord=2, axis=0)
-    def vnorm2(X):
-        return np.sum(np.real(X*X.conj()), axis=0)
+def vnorm(X):
+    return np.linalg.norm(X, ord=2, axis=0)
+def vnorm2(X):
+    return np.sum(np.real(X*X.conj()), axis=0)
 
 # OMP projection step
 class OMP_proj:
@@ -21,6 +12,17 @@ class OMP_proj:
         Y_res_X = np.dot(np.conj(Y_res).T, self.X)
         Y_res_X_norm = vnorm(Y_res_X)
         return np.argmax(Y_res_X_norm)
+
+# Auxiliar function for MOMP
+def compute_X_ii(X_iii):
+    sorting = np.argsort([x.shape[0] for x in X_iii])
+    X_ii = 1
+    for ii_dim in sorting:
+        X_ii = X_ii * X_iii[ii_dim].reshape([
+            X_iii[ii_dim].shape[0]
+            if ii_dimp == ii_dim else 1
+            for ii_dimp in range(len(X_iii))])
+    return X_ii
 
 # MOMP projection initialization steps
 class MOMP_greedy_proj:
@@ -50,14 +52,9 @@ class MOMP_greedy_proj:
             for ii_dim, sp in zip(self.sorting, self.sorting_pre):
                 AX = np.tensordot(AX, self.X[ii_dim], axes=(1+sp, 0))
                 YAX = np.tensordot(np.conj(Y_res), AX, axes=(0, 0))
-                if bool_cp:
-                    AX_norm = vnorm(AX.reshape([-1, AX.shape[-1]]))
-                    YAX_norm = vnorm(YAX.reshape([-1, YAX.shape[-1]]))
-                    iii = np.argmax(YAX_norm/AX_norm)
-                else:
-                    AX_norm2 = vnorm2(AX.reshape([-1, AX.shape[-1]]))
-                    YAX_norm2 = vnorm2(YAX.reshape([-1, YAX.shape[-1]]))
-                    iii = np.argmax(YAX_norm2/AX_norm2)
+                AX_norm2 = vnorm2(AX.reshape([-1, AX.shape[-1]]))
+                YAX_norm2 = vnorm2(YAX.reshape([-1, YAX.shape[-1]]))
+                iii = np.argmax(YAX_norm2/AX_norm2)
                 ii[ii_dim] = iii
                 AX = AX[..., iii]
         else:
@@ -73,12 +70,7 @@ class MOMP_greedy_proj:
                 YAX = YAX[..., iii]
         # Translate to high resolution
         if self.X_hr is not None:
-            X_ii = np.ones([x.shape[0] for x in self.X])
-            for ii_dim, iii in enumerate(ii):
-                X_ii = X_ii * self.X[ii_dim][:, iii].reshape([
-                    self.X[ii_dim].shape[0]
-                    if ii_dimp == ii_dim else 1
-                    for ii_dimp in range(len(self.X))])
+            X_iii = [x[:, iii] for x, iii in zip(self.X, ii)]
             td_axis_r = [ii_dimp for ii_dimp in range(len(self.X)-1)]
             for ii_dim in self.sorting:
                 iii = ii[ii_dim]
@@ -87,9 +79,9 @@ class MOMP_greedy_proj:
                     for ii_dimp in range(len(self.X))
                     if ii_dimp != ii_dim]
                 # Exclude (ii_dim, iii) from X_ii
-                X_niii = np.tensordot(
-                    X_ii, self.X[ii_dim][:, iii],
-                    axes=(ii_dim, 0))/self.X_norm2[ii_dim][iii]
+                X_niii = compute_X_ii([
+                    x for ii_dimp, x in enumerate(X_iii)
+                    if ii_dimp != ii_dim])
                 # Compute projection
                 if self.normallized:
                     AX_niii = np.tensordot(
@@ -108,12 +100,8 @@ class MOMP_greedy_proj:
                     YAX_norm = vnorm(YAX)
                     iii = np.argmax(YAX_norm)
                 ii[ii_dim] = iii
-                # Update X_ii
-                X_ii = np.expand_dims(X_niii, ii_dim) *\
-                    self.X_hr[ii_dim][:, iii].reshape([
-                        self.X_hr[ii_dim].shape[0]
-                        if ii_dimp == ii_dim else 1
-                        for ii_dimp in range(len(self.X_hr))])
+                # Update X_iii
+                X_iii[ii_dim] = self.X_hr[ii_dim][:, iii]
         return ii
 
 
@@ -152,13 +140,6 @@ class MOMP_proj:
         else:
             YA = np.tensordot(np.conj(Y_res), self.A, axes=(0, 0))
             ii = self.initial(Y_res, YA=YA)
-        # X_ii initialization
-        X_ii = np.ones([x.shape[0] for x in self.X])
-        for ii_dim, iii in enumerate(ii):
-            X_ii = X_ii * self.X[ii_dim][:, iii].reshape([
-                self.X[ii_dim].shape[0]
-                if ii_dimp == ii_dim else 1
-                for ii_dimp in range(len(self.X))])
         # Refinement iterations
         td_axis_r = [ii_dimp for ii_dimp in range(len(self.X)-1)]
         for _ in range(self.n):
@@ -169,9 +150,10 @@ class MOMP_proj:
                     for ii_dimp in range(len(self.X))
                     if ii_dimp != ii_dim]
                 # Exclude (ii_dim, iii) from X_ii
-                X_niii = np.tensordot(
-                    X_ii, self.X[ii_dim][:, iii],
-                    axes=(ii_dim, 0))/self.X_norm2[ii_dim][iii]
+                X_niii = compute_X_ii([
+                    self.X[ii_dimp][:, iii]
+                    for ii_dimp, iii in enumerate(ii)
+                    if ii_dimp != ii_dim])
                 # Compute projection
                 if self.normallized:
                     AX_niii = np.tensordot(
@@ -190,12 +172,8 @@ class MOMP_proj:
                     YAX_norm = vnorm(YAX)
                     iii = np.argmax(YAX_norm)
                 ii[ii_dim] = iii
-                # Update X_ii
-                X_ii = np.expand_dims(X_niii, ii_dim) *\
-                    self.X[ii_dim][:, iii].reshape([
-                        self.X[ii_dim].shape[0]
-                        if ii_dimp == ii_dim else 1
-                        for ii_dimp in range(len(self.X))])
+        # Compute X_ii
+        X_ii = compute_X_ii([x[:, iii] for x, iii in zip(self.X, ii)])
         AX_ii = np.tensordot(self.A, X_ii, axes=(
             [ii_dim+1 for ii_dim in range(len(self.sorting))],
             [ii_dim for ii_dim in range(len(self.sorting))]))

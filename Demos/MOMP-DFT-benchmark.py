@@ -88,6 +88,10 @@ for iter in range(ITER):
         # Evaluate
         Metric[ii_alg, iter] = metric(feat, feat_est)
 
+# Print
+for met_med, alg_name, ctime in zip(np.median(Metric, axis=1), alg_names, np.mean(CTime, axis=1)):
+    print("Algorithm {} achieves a median metric of {:.3f} in {:.2}s".format(alg_name, met_med, ctime))
+
 # Plots
 import matplotlib.pyplot as plt
 
@@ -103,4 +107,4 @@ plt.figure("CTime")
 plt.bar(alg_names, np.mean(CTime, axis=1))
 plt.yscale("log")
 plt.ylabel("Computational time [s]")
-#plt.show()
+plt.show()
