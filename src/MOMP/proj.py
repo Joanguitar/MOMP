@@ -257,7 +257,6 @@ class SMOMP_proj:
                 self.A.append(a)
                 self.A_Xi.append(Xi)
                 self.Y_shape.append(a.shape[0])
-        for
         self.X = X
         self.n = n
         self.normallized = normallized

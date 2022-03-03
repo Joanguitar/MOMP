@@ -5,7 +5,7 @@ from line_profiler import LineProfiler
 
 # Params
 ITER = 100                      # Number of Monte-Carlo simulations
-N_s = [4]*5+[5]                 # Dictionary atoms size
+N_s = [4]*3+[5, 6, 3]           # Dictionary atoms size
 N_a = [80]*5+[100]              # Dictionary atoms
 N_a_lr = [16]*5+[20]            # Dictionary atoms (low resolution)
 N_o = 1000                      # Observation length
