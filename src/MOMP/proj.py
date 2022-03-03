@@ -11,7 +11,8 @@ class OMP_proj:
     def __call__(self, Y_res):
         Y_res_X = np.dot(np.conj(Y_res).T, self.X)
         Y_res_X_norm = vnorm(Y_res_X)
-        return np.argmax(Y_res_X_norm)
+        ii = np.argmax(Y_res_X_norm)
+        return ii, self.X[:, ii]
 
 # Auxiliar functions for MOMP and SMOMP
 def compute_X_ii(X_iii):
