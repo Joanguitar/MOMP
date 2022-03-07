@@ -7,9 +7,10 @@ def vnorm2(X):
 # OMP projection step
 class OMP_proj:
     def __init__(self, X):
-        self.X = X/vnorm(X)[np.newaxis]
+        self.X = X
+        self.X_norm = X/vnorm(X)[np.newaxis]
     def __call__(self, Y_res):
-        Y_res_X = np.dot(np.conj(Y_res).T, self.X)
+        Y_res_X = np.dot(np.conj(Y_res).T, self.X_norm)
         Y_res_X_norm = vnorm(Y_res_X)
         ii = np.argmax(Y_res_X_norm)
         return ii, self.X[:, ii]
