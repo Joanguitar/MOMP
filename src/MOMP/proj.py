@@ -242,24 +242,21 @@ class SMOMP_greedy_proj:
 # SMOMP projection step
 class SMOMP_proj:
     def __init__(self, A, X, n=2, initial=None, sorting=None, normallized=True):
-        self.A = []
-        self.X_Ai = [None]*len(X)
-        self.A_Xi = []
-        self.Y_shape = []
-        for a, Xi in A:
-            if a is None:
-                for ii_dim in Xi:
-                    self.X_Ai[ii_dim] = len(self.A)
-                    self.A.append(None)
-                    self.A_Xi.append([ii_dim])
-                    self.Y_shape.append(X[ii_dim].shape[0])
-            else:
-                for ii_dim in Xi:
-                    self.X_Ai[ii_dim] = len(self.A)
-                self.A.append(a)
-                self.A_Xi.append(Xi)
-                self.Y_shape.append(a.shape[0])
+        self.A = A
         self.X = X
+        self.X_Ai = [None]*len(X)
+        self.Y_shape = []
+        ii_dim = -1
+        for ii_a, a, in enumerate(A):
+            if a is None:
+                ii_dim += 1
+                self.X_Ai[ii_dim] = ii_a
+                self.Y_shape.append(self.X[ii_dim].shape[0])
+            else:
+                for _ in range(len(a.shape)-1):
+                    ii_dim += 1
+                    self.X_Ai[ii_dim] = ii_a
+                self.Y_shape.append(a.shape[0])
         self.n = n
         self.normallized = normallized
         if sorting is None:
@@ -274,7 +271,9 @@ class SMOMP_proj:
         if self.normallized:
             ii = self.initial(Y_res)
         else:
-            YA = np.tensordot(np.conj(Y_res), self.A, axes=(0, 0))
+            YA = Y_res.conj().reshape(self.Y_shape+[-1])
+            for a in self.A:
+                YA = np.tensordot(YA, a, axes=(0, 0))
             ii = self.initial(Y_res, YA=YA)
         # Refinement iterations
         td_axis_r = [ii_dimp for ii_dimp in range(len(self.X)-1)]
@@ -309,8 +308,24 @@ class SMOMP_proj:
                     iii = np.argmax(YAX_norm)
                 ii[ii_dim] = iii
         # Compute X_ii
-        X_ii = compute_X_ii([x[:, iii] for x, iii in zip(self.X, ii)])
-        AX_ii = np.tensordot(self.A, X_ii, axes=(
-            [ii_dim+1 for ii_dim in range(len(self.sorting))],
-            [ii_dim for ii_dim in range(len(self.sorting))]))
+        X_ii = [
+            compute_X_ii([
+                self.X[ii_dim][:, ii[ii_dim]]
+                for ii_dim in range(len(self.X))
+                if self.X_Ai[ii_dim] == ii_a])
+            for ii_a, a in enumerate(self.A)]
+        AX_ii = [
+            np.tensordot(a, x_ii, axes=(
+                [ii_dim for ii_dim in range(1, len(a.shape))],
+                [ii_dim for ii_dim in range(len(x_ii.shape))]))
+            for a, x_ii in zip(self.A, X_ii)]
+        AX_ii = [
+            ax_ii.reshape([
+                len(ax_ii) if ii_dimp == ii_dim else 1
+                for ii_dimp in range(len(AX_ii))])
+            for ii_dim, ax_ii in enumerate(AX_ii)]
+        AX_ii_prod = 1
+        for ax_ii in AX_ii:
+            AX_ii_prod = AX_ii_prod * ax_ii
+        AX_ii = AX_ii_prod.reshape([-1])
         return ii, AX_ii
