@@ -35,17 +35,22 @@ A = A.reshape([N_o]+N_s)
 stop = MOMP.stop.General(maxIter=N_p)   # We assume we know the number of paths
 
 # Define initial projection step
-proj_init = MOMP.proj.MOMP_greedy_proj(A, X, X_lr, normallized=False)
+proj_init_MOMP = MOMP.proj.MOMP_greedy_proj(A, X, X_lr, normallized=False)
+proj_init_SMOMP = MOMP.proj.SMOMP_greedy_proj([A1, A2], X, X_lr, normallized=False)
 
 # Define projection step
-proj_MOMP = MOMP.proj.MOMP_proj(A, X, initial=proj_init, normallized=False)
-proj_SMOMP = MOMP.proj.SMOMP_proj([A1, A2], X, initial=proj_init, normallized=False)
+proj_MOMP_nonorm = MOMP.proj.MOMP_proj(A, X, initial=proj_init_MOMP, normallized=False)
+proj_MOMP = MOMP.proj.MOMP_proj(A, X, initial=proj_init_MOMP, normallized=True)
+proj_SMOMP_nonorm = MOMP.proj.SMOMP_proj([A1, A2], X, initial=proj_init_SMOMP, normallized=False)
+proj_SMOMP = MOMP.proj.SMOMP_proj([A1, A2], X, initial=proj_init_SMOMP, normallized=True)
 
 # Define algorithm
+alg_MOMP_nonorm = MOMP.mp.OMP(proj_MOMP_nonorm, stop)
 alg_MOMP = MOMP.mp.OMP(proj_MOMP, stop)
+alg_SMOMP_nonorm = MOMP.mp.OMP(proj_SMOMP_nonorm, stop)
 alg_SMOMP = MOMP.mp.OMP(proj_SMOMP, stop)
-algs = [alg_MOMP, alg_SMOMP]
-alg_names = ["MOMP", "SMOMP"]
+algs = [alg_SMOMP, alg_MOMP, alg_SMOMP_nonorm, alg_MOMP_nonorm]
+alg_names = ["SMOMP", "MOMP", "SMOMP-nonorm", "MOMP-nonorm"]
 
 # Define evaluation metric
 def wrap_angle(a):
@@ -98,9 +103,11 @@ for met_med, alg_name, ctime in zip(np.median(Metric, axis=1), alg_names, np.mea
 # Plots
 import matplotlib.pyplot as plt
 
+Style = {"MOMP": "--", "SMOMP": "-"}
+
 plt.figure("Metric")
 for ii_alg, alg_name in enumerate(alg_names):
-    plt.plot(np.sort(Metric[ii_alg]), np.linspace(0, 100, ITER), label = alg_name)
+    plt.plot(np.sort(Metric[ii_alg]), np.linspace(0, 100, ITER), Style[alg_name.split("-")[0]], label = alg_name)
 plt.xlim([0, 0.5])
 plt.xlabel("Metric")
 plt.ylabel("Probability [%]")
