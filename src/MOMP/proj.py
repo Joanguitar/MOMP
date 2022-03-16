@@ -91,17 +91,17 @@ def lr2hr_S(ii, Y, A, X, X_lr, sorting=None, normallized=True, YA=None):
                 x
                 for ii_dim, x in enumerate(X_iii)
                 if X_Ai[ii_dim] == ii_a])
-            for ii_a, a in enumerate(self.A)]
+            for ii_a, a in enumerate(A)]
         AX_ii = [
             np.tensordot(a, x_ii, axes=(
                 [ii_dim for ii_dim in range(1, len(a.shape))],
                 [ii_dim for ii_dim in range(len(x_ii.shape))]))
             if a is not None else x_ii
-            for a, x_ii in zip(self.A, X_ii)]
+            for a, x_ii in zip(A, X_ii)]
     else:
         if YA is None:
-            YA = Y_res.conj().reshape(self.Y_shape+[-1])
-            for a in self.A:
+            YA = Y_res.conj().reshape(Y_shape+[-1])
+            for a in A:
                 if a is not None:
                     YA = np.tensordot(YA, a, axes=(0, 0))
                 else:
@@ -117,8 +117,8 @@ def lr2hr_S(ii, Y, A, X, X_lr, sorting=None, normallized=True, YA=None):
         if normallized:
             # Exclude (ii_dim, iii) from X_ii[self.X_Ai[ii_dim]]
             x_niii = compute_X_ii([
-                X_iii[ii_dimp]
-                for ii_dim in range(len(X_lr))
+                x
+                for ii_dimp, x in enumerate(X_iii)
                 if ii_dimp != ii_dim
                 and X_Ai[ii_dimp] == X_Ai[ii_dim]])
             A_Xi = [
@@ -136,7 +136,7 @@ def lr2hr_S(ii, Y, A, X, X_lr, sorting=None, normallized=True, YA=None):
             else:
                 ax = self.X[ii_dim]
             YAX_nXiidim = np.tensordot(
-                Y_res.conj().reshape(Y_shape+[-1]),
+                Y.conj().reshape(Y_shape+[-1]),
                 compute_X_ii([
                     ax for ii_a, ax in enumerate(AX_ii)
                     if ii_a != X_Ai[ii_dim]]),
@@ -163,6 +163,12 @@ def lr2hr_S(ii, Y, A, X, X_lr, sorting=None, normallized=True, YA=None):
         ii[ii_dim] = iii
         # Update X_iii
         X_iii[ii_dim] = X[ii_dim][:, iii]
+        if normallized:
+            X_ii[X_Ai[ii_dim]] = compute_X_ii([
+                x
+                for ii_dimp, x in enumerate(X_iii)
+                if X_Ai[ii_dimp] == X_Ai[ii_dim]])
+            AX_ii[X_Ai[ii_dim]] = ax[:, iii]
     return ii
 
 # MOMP projection initialization steps

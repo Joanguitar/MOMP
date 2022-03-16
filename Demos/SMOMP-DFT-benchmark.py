@@ -36,7 +36,7 @@ stop = MOMP.stop.General(maxIter=N_p)   # We assume we know the number of paths
 
 # Define initial projection step
 proj_init_MOMP = MOMP.proj.MOMP_greedy_proj(A, X, X_lr, normallized=False)
-proj_init_SMOMP = MOMP.proj.SMOMP_greedy_proj([A1, A2], X, X_lr, normallized=False)
+proj_init_SMOMP = MOMP.proj.SMOMP_greedy_proj([A1, A2], X, X_lr, normallized=True)
 
 # Define projection step
 proj_MOMP_nonorm = MOMP.proj.MOMP_proj(A, X, initial=proj_init_MOMP, normallized=False)
