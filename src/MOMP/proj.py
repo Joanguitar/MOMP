@@ -47,7 +47,7 @@ class OMP_proj_FT:
             Y_res_X_norm = vnorm(Y_res_X)
             ii = np.argmax(Y_res_X_norm)
             theta += theta_dom[ii]
-        return theta, X[:, ii]
+        return theta, np.exp(1j * theta * np.arange(len(Y_res)))
 
 # Auxiliar functions for MOMP and SMOMP
 def compute_X_ii(X_iii):
