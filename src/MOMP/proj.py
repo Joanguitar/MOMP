@@ -15,6 +15,40 @@ class OMP_proj:
         ii = np.argmax(Y_res_X_norm)
         return ii, self.X[:, ii]
 
+class OMP_proj_FT:
+    def __init__(self, steps=3, res=7):
+        self.steps = steps
+        if res < 5:
+            raise ValueError('res must be at least 5')
+        self.res = res
+        self.theta_dom_inital = []
+    def build(self, Y_res):
+        theta_dom = np.linspace(0, 2*np.pi, 2*len(Y_res)+1)[:-1]
+        self.theta_dom_inital = theta_dom.copy()
+        self.X_initial = np.exp(1j * theta_dom[None] * np.arange(len(Y_res))[:, None])
+        theta_delta = np.pi / len(Y_res)
+        self.theta_dom = []
+        self.X = []
+        for _ in range(self.steps):
+            theta_delta *= (2 - 1 / (self.res + 1)) / (self.res - 1)
+            theta_dom = np.linspace(-theta_delta, theta_delta, self.res)
+            self.theta_dom.append(theta_dom.copy())
+            self.X.append(np.exp(1j * theta_dom[None] * np.arange(len(Y_res))[:, None]))
+    def __call__(self, Y_res):
+        if len(self.theta_dom_inital) != 2 * len(Y_res):
+            print("BUILD")
+            self.build(Y_res)
+        Y_res_X = np.dot(np.conj(Y_res).T, self.X_initial)
+        Y_res_X_norm = vnorm(Y_res_X)
+        ii = np.argmax(Y_res_X_norm)
+        theta = self.theta_dom_inital[ii]
+        for theta_dom, X in zip(self.theta_dom, self.X):
+            Y_res_X = np.dot(np.conj(Y_res).T, np.exp(1j * theta * np.arange(len(Y_res))[:, None]) * X)
+            Y_res_X_norm = vnorm(Y_res_X)
+            ii = np.argmax(Y_res_X_norm)
+            theta += theta_dom[ii]
+        return theta, X[:, ii]
+
 # Auxiliar functions for MOMP and SMOMP
 def compute_X_ii(X_iii):
     sorting = np.argsort([x.shape[0] for x in X_iii])
@@ -100,7 +134,7 @@ def lr2hr_S(ii, Y, A, X, X_lr, sorting=None, normallized=True, YA=None):
             for a, x_ii in zip(A, X_ii)]
     else:
         if YA is None:
-            YA = Y_res.conj().reshape(Y_shape+[-1])
+            YA = Y.conj().reshape(Y_shape+[-1])
             for a in A:
                 if a is not None:
                     YA = np.tensordot(YA, a, axes=(0, 0))
@@ -134,7 +168,7 @@ def lr2hr_S(ii, Y, A, X, X_lr, sorting=None, normallized=True, YA=None):
                     axes=(td_axis_l, td_axis_r))
                 ax = np.dot(ax_niii, X[ii_dim])
             else:
-                ax = self.X[ii_dim]
+                ax = X[ii_dim]
             YAX_nXiidim = np.tensordot(
                 Y.conj().reshape(Y_shape+[-1]),
                 compute_X_ii([
